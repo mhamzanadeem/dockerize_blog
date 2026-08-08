@@ -1,6 +1,15 @@
-# Medium Blog App
+# Medium Blog App (DevOps Essentials)
 
-A full-stack blog application with a **React (Vite + Tailwind)** frontend and **Node.js/Express JSON API** backend. Users can sign up, write stories with a rich text editor, upload cover images, comment on posts, and manage their profile. Data is stored in **MongoDB Atlas**.
+A full-stack blog application with a **React (Vite + Tailwind)** frontend and **Node.js/Express JSON API** backend. Users can sign up, write stories with a rich text editor, upload cover images, comment on posts, and manage their profile.
+
+> **DevOps delivery:** the app is **fully containerized** (frontend + backend Docker images), deployed as containers on **Render** free tier, connected to a **MongoDB Atlas M0** free cluster, and shipped through a **GitHub Actions CI/CD pipeline**.
+
+| Service | URL |
+|---|---|
+| **Frontend** (React SPA + nginx) | https://blog-web-latest-dpx6.onrender.com |
+| **Backend** (Express JSON API) | https://blog-api-latest-ltrs.onrender.com |
+| **Backend health check** | https://blog-api-latest-ltrs.onrender.com/api/health |
+| **Database** | MongoDB Atlas — free `M0` cluster |
 
 ---
 
@@ -20,7 +29,7 @@ A full-stack blog application with a **React (Vite + Tailwind)** frontend and **
 
 ## Prerequisites
 
-**Node.js** (LTS) — download from https://nodejs.org
+**Node.js** (LTS v22+) — download from https://nodejs.org
 
 Verify installation:
 ```bash
@@ -30,32 +39,20 @@ npm --version
 
 ---
 
-## Installation
+## Running Locally
 
-### Step 1: Clone the project
-
-```bash
-git clone <repo-url>
-cd nodejs-crud-app
-```
-
-### Step 2: Install backend dependencies
+### 1. Install dependencies
 
 ```bash
 cd backend
 npm install
-```
-
-### Step 3: Install frontend dependencies
-
-```bash
 cd ../frontend
 npm install
 ```
 
-### Step 4: Configure environment variables
+### 2. Configure environment variables
 
-The backend uses a `.env` file at the **project root**:
+The backend reads a `.env` file at the **project root**:
 
 ```
 MONGO_URL=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/medium-clone?retryWrites=true&w=majority
@@ -71,9 +68,9 @@ The frontend uses `frontend/.env`:
 VITE_API_URL=http://localhost:8000/api
 ```
 
-For production, change `VITE_API_URL` to your Render/cloud backend URL.
+For production builds, `VITE_API_URL` is baked into the bundle (see the Docker/CI section below).
 
-### Step 5: Run the backend
+### 3. Run the backend
 
 ```bash
 cd backend
@@ -86,7 +83,7 @@ Server Started at PORT:8000
 MongoDB Connected
 ```
 
-### Step 6: Run the frontend
+### 4. Run the frontend
 
 In a separate terminal:
 
@@ -102,57 +99,39 @@ Opens at `http://localhost:5173`.
 ## Project Structure
 
 ```
-nodejs-crud-app/
+.
+├── .github/workflows/ci-cd.yml     # GitHub Actions CI/CD pipeline
+├── render.yaml                     # Render blueprint reference (IaC)
+├── README.md
 ├── backend/                        # Node.js + Express JSON API
 │   ├── app.js                      # Entry point
+│   ├── Dockerfile                  # Multi-stage node:22-alpine image
+│   ├── .dockerignore
 │   ├── package.json
-│   ├── middlewares/
-│   │   ├── authentication.js       # Cookie-based JWT check
-│   │   └── requireApiAuth.js       # Auth guard for API routes
-│   ├── models/
-│   │   ├── blog.js                 # Blog schema
-│   │   ├── comment.js              # Comment schema (supports replies)
-│   │   └── user.js                 # User schema (password hashing)
-│   ├── routes/
-│   │   └── api/
-│   │       ├── user.js             # Auth, profile, avatar, password
-│   │       ├── blog.js             # Blog CRUD, list, search, upload
-│   │       └── comment.js          # Comments, replies, delete
-│   ├── services/
-│   │   └── authentication.js       # JWT create/validate
-│   └── public/
-│       ├── images/default.png      # Default avatar
-│       └── uploads/                # Uploaded images
+│   ├── middlewares/                # authentication, requireApiAuth
+│   ├── models/                     # blog, comment, user (password hashing)
+│   ├── routes/api/                 # user, blog, comment
+│   ├── services/authentication.js  # JWT create/validate
+│   └── public/uploads/             # Uploaded images (ephemeral)
 ├── frontend/                       # React + Vite + Tailwind SPA
 │   ├── index.html
 │   ├── vite.config.js
-│   ├── .env
+│   ├── Dockerfile                  # Multi-stage: Vite build → nginx
+│   ├── nginx.conf                  # Static nginx config (SPA fallback)
+│   ├── .dockerignore
 │   ├── package.json
 │   └── src/
-│       ├── main.jsx
+│       ├── main.jsx                # Entry point
 │       ├── App.jsx                 # Root layout, sidebar context
 │       ├── routes.jsx              # Lazy-loaded route definitions
-│       ├── api/                    # Axios API client
-│       │   ├── axiosConfig.js
-│       │   ├── authApi.js
-│       │   ├── blogApi.js
-│       │   └── commentApi.js
-│       ├── components/
-│       │   ├── auth/               # SignIn, SignUp
-│       │   ├── blogs/              # BlogList, BlogDetails, CreateBlog, EditBlog
-│       │   ├── common/             # Navbar, BlogCard, Comment, Footer, Modal, Loader, ServerStatus
-│       │   └── profile/            # Settings (profile, security, posts, danger zone)
+│       ├── api/                    # Axios client (axiosConfig, auth, blog, comment)
+│       ├── components/             # auth, blogs, common, profile
 │       ├── context/                # AuthContext, BlogContext
 │       ├── hooks/                  # useAuth, useBlog, useToast
 │       ├── pages/                  # Page wrappers for each route
-│       ├── styles/
-│       │   └── globals.css         # Design tokens, fonts, Quill styles
-│       └── utils/
-│           ├── constants.js
-│           ├── formatters.js
-│           └── validators.js
-├── .env                            # Backend environment variables
-├── .env.example
+│       ├── styles/globals.css      # Design tokens, fonts, Quill styles
+│       └── utils/                  # constants, formatters, validators
+├── .env                            # Backend environment variables (local only)
 └── .gitignore
 ```
 
@@ -203,6 +182,98 @@ nodejs-crud-app/
 | **Multer** | File upload handling |
 | **Helmet** | Security headers |
 | **express-rate-limit** | Rate limiting |
+| **Docker** | Containerization |
+| **GitHub Actions** | CI/CD pipeline |
+| **Render** | Container hosting (free) |
+
+---
+
+## Dockerization & CI/CD (DevOps delivery)
+
+Both services are **containerized** and deployed as Docker containers on **Render**, with CI/CD fully driven by **GitHub Actions**. Render's built-in auto-deploy is intentionally turned **off** — deploys happen only through the pipeline.
+
+```
+GitHub repo (mhamzanadeem/dockerize_blog)
+  ├── frontend/Dockerfile ──► Vite build (VITE_API_URL baked) ──► nginx:alpine
+  ├── backend/Dockerfile  ──► node:22-alpine (non-root) ──► Express API
+  ├── .github/workflows/ci-cd.yml ──► CI checks ► build+push ghcr.io ► Render deploy hooks
+  └── render.yaml ──► IaC reference (2 services, auto-deploy OFF)
+
+MongoDB Atlas M0 (free)
+  ▲ MONGO_URL
+Render (free)
+  ▲ pulls prebuilt images from ghcr.io/mhamzanadeem/dockerize_blog/{blog-api,blog-web}
+```
+
+### Containers
+
+- **backend/Dockerfile** — multi-stage `node:22-alpine`: installs production deps (`npm ci --omit=dev`), copies source, creates `public/uploads`, runs as the non-root `node` user, listens on `$PORT` (or defaults to 8000). `backend/.dockerignore` keeps `node_modules`, `.env`, uploads, and logs out of the image.
+
+- **frontend/Dockerfile** — multi-stage: builds the production bundle with Vite (accepting `ARG VITE_API_URL`, baked into the JS payload), then serves it from `nginx:alpine` with a **static** `nginx.conf` (`listen 80`, SPA fallback, gzip, immutable asset caching).
+
+### CI/CD pipeline (`.github/workflows/ci-cd.yml`)
+
+Runs on every push to `main` (and on manual `workflow_dispatch`):
+
+1. **CI — checks:** backend install + syntax check; frontend install + production build.
+2. **CI — build & push:** both images are built and pushed to the **GitHub Container Registry** (ghcr.io) as `blog-api` and `blog-web`.
+3. **CD — deploy:** the workflow `curl`s each service's **Render Deploy Hook**, then polls `GET /api/health` on the backend URL until the service is live.
+
+Where each piece runs:
+
+| Stage | Platform |
+|---|---|
+| Source code | GitHub (`dockerize_blog` repo) |
+| Build + push images | GitHub Actions → GHCR |
+| Runtime (containers) | Render free-tier Web Services |
+| Database | MongoDB Atlas (M0) |
+
+### Required GitHub Actions secrets
+
+| Secret | Value |
+|---|---|
+| `VITE_API_URL` | `https://blog-api-latest-ltrs.onrender.com/api` |
+| `RENDER_API_URL` | `https://blog-api-latest-ltrs.onrender.com` |
+| `RENDER_HOOK_API` | Backend service Deploy Hook URL (service → Settings → Deploy Hook) |
+| `RENDER_HOOK_WEB` | Frontend service Deploy Hook URL |
+
+### Reproducing the deployment (steps)
+
+1. **MongoDB Atlas** — create a free `M0` cluster, add a database user, and in **Network Access** allow all IPs (`0.0.0.0/0`). Copy the connection string.
+2. **Render — backend:** `New + → Web Service → Existing image` → `ghcr.io/mhamzanadeem/dockerize_blog/blog-api:latest` → plan **Free** → env: `NODE_ENV=production`, `MONGO_URL`, `JWT_SECRET`, `COOKIE_SECRET` → health check path `/api/health`.
+3. **Render — frontend:** same flow with `ghcr.io/mhamzanadeem/dockerize_blog/blog-web:latest` → health check path `/`.
+4. **GitHub secrets** — add the four secrets from the table above.
+5. **Push to `main`** — the workflow rebuilds both images and triggers both deploy hooks automatically.
+
+---
+
+## Known limitations (free tier)
+
+- Render free web services **sleep after ~15 min of inactivity** (cold start ~1 min). The UI includes a “wake-up” button exactly for this.
+- Uploaded images live on the container's **ephemeral disk** — they reset on every redeploy. Fine for a demo; for production, store uploads in S3 / Cloud Storage / GridFS.
+- GHCR image `latest` tags were **made public** explicitly (Packages page → Change visibility) so Render can pull them anonymously.
+
+---
+
+## Troubleshooting
+
+### MongoDB connection fails
+Check `MONGO_URL`. Whitelist all IPs (`0.0.0.0/0`) in MongoDB Atlas **Network Access**.
+
+### Port in use
+Change `PORT` in `.env` (e.g., `PORT=3001`).
+
+### Frontend can't reach backend
+Ensure the backend URL is baked correctly: rebuild the frontend image with `ARG VITE_API_URL` set to the backend URL (`/api`), or verify the browser's network tab for the actual API call target.
+
+### nginx deploy failed with `invalid port in "${PORT:-80}"`
+That config happened when the nginx config used a shell-style `${PORT:-80}` template that Render's environment doesn't resolve. The fix already applied: the frontend image now ships a **static** `nginx.conf` with `listen 80;` — no env-var templating.
+
+### GHCR image can't be pulled by Render (401 / “No public image”)
+Anonymous access to GHCR works only for packages whose repo is public **and** whose package **image** visibility was changed to Public under GitHub → Packages → the package → **Settings → Change visibility**.
+
+### Render deploy keeps the old image
+Render services created from an image keep the tag pinned at creation. After pushing a new `:latest`, trigger **Manual Deploy → Deploy latest image** (or wire the Deploy Hook into GitHub Actions to redeploy automatically).
 
 ---
 
@@ -216,71 +287,5 @@ nodejs-crud-app/
 - Files saved with random UUID filenames
 - Helmet security headers
 - Email addresses stored in lowercase
-- `node_modules/` and `.env` excluded from version control
-
----
-
-## Dockerization & CI/CD (DevOps Essentials delivery)
-
-Both the backend (Node/Express) and the frontend (React/Vite) are **containerized** and deployed as Docker containers on **Render** (free tier), with data in **MongoDB Atlas** and CI/CD powered by **GitHub Actions**.
-
-```
-GitHub repo
-  ├── frontend/Dockerfile ──► Vite build (+ baked VITE_API_URL) ──► nginx alpine
-  ├── backend/Dockerfile  ──► node:22-alpine (non-root) ──► Express API
-  ├── .github/workflows/ci-cd.yml ──► CI checks ► build & push to ghcr.io ► Render deploy hooks
-  └── render.yaml ──► IaC reference (services, autoDeployTrigger: off)
-MongoDB Atlas M0 (free) ◄── backend reads MONGO_URL
-Render (free) ◄── pulls prebuilt images from ghcr.io (both web services, auto-deploy OFF)
-```
-
-### Containers
-
-- **backend/Dockerfile** — multi-stage `node:22-alpine`, installs production deps, runs as the `node` user, listens on `$PORT` (Render injects it). Runtime dirs (`public/uploads`) are created automatically.
-- **frontend/Dockerfile** — multi-stage: `Vite build` (accepts `ARG VITE_API_URL`, baked into the bundle) then `nginx:alpine` serving the static build; nginx listens on Render's `$PORT` via `nginx.conf.template`.
-
-### CI/CD pipeline (`.github/workflows/ci-cd.yml`)
-
-Runs on every push to `main`:
-
-1. **CI** — backend install + syntax check, frontend install + production build.
-2. **CI** — builds both Docker images and pushes them to **GitHub Container Registry** (`ghcr.io/<owner>/<repo>/blog-api` and `blog-web`).
-3. **CD** — `curl`s each service's **Render Deploy Hook**, then waits for `/api/health` on the backend URL.
-
-Render's built-in auto-deploy is **off** (`autoDeployTrigger: off`) — deploying only via the deploy hooks keeps the pipeline controlled and scaffolds images across redeploys.
-
-### Required GitHub Actions secrets
-
-| Secret | Value |
-|---|---|
-| `VITE_API_URL` | Backend URL, e.g. `https://<api-subdomain>.onrender.com/api` |
-| `RENDER_HOOK_API` | API (backend) service **Deploy Hook** URL (Render dashboard → service → Settings → Deploy Hook) |
-| `RENDER_HOOK_WEB` | Frontend service Deploy Hook URL |
-| `RENDER_API_URL` | Backend URL, e.g. `https://<api-subdomain>.onrender.com` (used for post-deploy health check) |
-
-### One-time cloud setup (all free)
-
-1. **MongoDB Atlas** → create free `M0` cluster, DB user, allow `0.0.0.0/0` in Network Access. Copy the connection string into `MONGO_URL`.
-2. **Render** → `New + > Web Service > Source: Container Registry`, paste the GHCR image (`ghcr.io/<owner>/<repo>/blog-api:latest`), set plan **Free**.
-   - Env: `MONGO_URL`, `JWT_SECRET`, `COOKIE_SECRET`, `CORS_ORIGIN=https://<frontend-subdomain>.onrender.com`, `NODE_ENV=production`. Health check path `/api/health`.
-   - Repeat for frontend with image `ghcr.io/<owner>/<repo>/blog-web:latest`, health check `/`.
-   - Copy both **Deploy Hook** URLs into the GH secrets above.
-3. Push to `main` → the workflow builds, pushes images, and triggers the deploys automatically.
-
-### Known limitations (free-tier)
-
-- Render free web services **sleep after ~15 min of inactivity** (cold start ~1 min). The UI includes a "wake-up" button for exactly this.
-- Uploaded images live on the container's **ephemeral disk** — they reset on every redeploy. Fine for a demo; for production move uploads to S3 / Cloud Storage / GridFS.
-
----
-
-## Troubleshooting
-
-### MongoDB connection fails
-Check `MONGO_URL` in `.env`. Whitelist all IPs (`0.0.0.0/0`) in MongoDB Atlas Network Access.
-
-### Port in use
-Change `PORT` in `.env` (e.g., `PORT=3001`).
-
-### Frontend can't reach backend
-Ensure backend is running. Check `VITE_API_URL` in `frontend/.env` matches your backend URL.
+- `node_modules/`, `dist/`, and `.env` excluded from version control
+- Backend container runs as the non-root `node` user
