@@ -220,6 +220,60 @@ nodejs-crud-app/
 
 ---
 
+## Dockerization & CI/CD (DevOps Essentials delivery)
+
+Both the backend (Node/Express) and the frontend (React/Vite) are **containerized** and deployed as Docker containers on **Render** (free tier), with data in **MongoDB Atlas** and CI/CD powered by **GitHub Actions**.
+
+```
+GitHub repo
+  ├── frontend/Dockerfile ──► Vite build (+ baked VITE_API_URL) ──► nginx alpine
+  ├── backend/Dockerfile  ──► node:22-alpine (non-root) ──► Express API
+  ├── .github/workflows/ci-cd.yml ──► CI checks ► build & push to ghcr.io ► Render deploy hooks
+  └── render.yaml ──► IaC reference (services, autoDeployTrigger: off)
+MongoDB Atlas M0 (free) ◄── backend reads MONGO_URL
+Render (free) ◄── pulls prebuilt images from ghcr.io (both web services, auto-deploy OFF)
+```
+
+### Containers
+
+- **backend/Dockerfile** — multi-stage `node:22-alpine`, installs production deps, runs as the `node` user, listens on `$PORT` (Render injects it). Runtime dirs (`public/uploads`) are created automatically.
+- **frontend/Dockerfile** — multi-stage: `Vite build` (accepts `ARG VITE_API_URL`, baked into the bundle) then `nginx:alpine` serving the static build; nginx listens on Render's `$PORT` via `nginx.conf.template`.
+
+### CI/CD pipeline (`.github/workflows/ci-cd.yml`)
+
+Runs on every push to `main`:
+
+1. **CI** — backend install + syntax check, frontend install + production build.
+2. **CI** — builds both Docker images and pushes them to **GitHub Container Registry** (`ghcr.io/<owner>/<repo>/blog-api` and `blog-web`).
+3. **CD** — `curl`s each service's **Render Deploy Hook**, then waits for `/api/health` on the backend URL.
+
+Render's built-in auto-deploy is **off** (`autoDeployTrigger: off`) — deploying only via the deploy hooks keeps the pipeline controlled and scaffolds images across redeploys.
+
+### Required GitHub Actions secrets
+
+| Secret | Value |
+|---|---|
+| `VITE_API_URL` | Backend URL, e.g. `https://<api-subdomain>.onrender.com/api` |
+| `RENDER_HOOK_API` | API (backend) service **Deploy Hook** URL (Render dashboard → service → Settings → Deploy Hook) |
+| `RENDER_HOOK_WEB` | Frontend service Deploy Hook URL |
+| `RENDER_API_URL` | Backend URL, e.g. `https://<api-subdomain>.onrender.com` (used for post-deploy health check) |
+
+### One-time cloud setup (all free)
+
+1. **MongoDB Atlas** → create free `M0` cluster, DB user, allow `0.0.0.0/0` in Network Access. Copy the connection string into `MONGO_URL`.
+2. **Render** → `New + > Web Service > Source: Container Registry`, paste the GHCR image (`ghcr.io/<owner>/<repo>/blog-api:latest`), set plan **Free**.
+   - Env: `MONGO_URL`, `JWT_SECRET`, `COOKIE_SECRET`, `CORS_ORIGIN=https://<frontend-subdomain>.onrender.com`, `NODE_ENV=production`. Health check path `/api/health`.
+   - Repeat for frontend with image `ghcr.io/<owner>/<repo>/blog-web:latest`, health check `/`.
+   - Copy both **Deploy Hook** URLs into the GH secrets above.
+3. Push to `main` → the workflow builds, pushes images, and triggers the deploys automatically.
+
+### Known limitations (free-tier)
+
+- Render free web services **sleep after ~15 min of inactivity** (cold start ~1 min). The UI includes a "wake-up" button for exactly this.
+- Uploaded images live on the container's **ephemeral disk** — they reset on every redeploy. Fine for a demo; for production move uploads to S3 / Cloud Storage / GridFS.
+
+---
+
 ## Troubleshooting
 
 ### MongoDB connection fails

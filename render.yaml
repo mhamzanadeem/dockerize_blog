@@ -1,0 +1,35 @@
+# REFERENCE ONLY — Infrastructure as Code documentation.
+#
+# In this delivery CI/CD runs in GitHub Actions, which pushes prebuilt images
+# to GHCR and triggers deploys via Render deploy hooks. Services are created
+# in the Render Dashboard with source = "Container Registry". This file
+# documents the desired state of those services (autoDeployTrigger is off so
+# Render's built-in auto-CI/CD never fires; deploys come only from GitHub Actions).
+
+services:
+  - type: web
+    name: blog-api
+    runtime: image
+    image:
+      url: ghcr.io/REPLACE_WITH_GITHUB_OWNER/REPLACE_WITH_REPO/blog-api:latest
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: MONGO_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: COOKIE_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        value: https://REPLACE_WITH_FRONTEND.onrender.com
+      - key: NODE_ENV
+        value: production
+
+  - type: web
+    name: blog-web
+    runtime: image
+    image:
+      url: ghcr.io/REPLACE_WITH_GITHUB_OWNER/REPLACE_WITH_REPO/blog-web:latest
+    plan: free
+    healthCheckPath: /
